@@ -1,51 +1,52 @@
 ###############################################################################
-## Sprint 2: Web Application
-## Feature 2: Personalize Web Application
-## User Story 2: Personalize Web Application
+## Sprint 3: Database Integration
+## Feature 2: Persist To-Do List
+## User Story 2: Load To-Do List
 ###############################################################################
 import os
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, g
+from database import db, Todo
 
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))   # Get the directory of the this file
 todo_file = os.path.join(basedir, 'todo_list.txt')     # Create the path to the to-do list file using the directory
+app.config["SQLALCHEMY_DATABASE_URI"] = 'sqlite:///' + os.path.join(basedir, 'todos.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-todo_list = []
+db.init_app(app)
 
-# Load the to-do list from a file
-try:
-    print("Loading the to-do list from the file")
-    with open(todo_file, "r+") as file:
-        for line in file:
-            print(line)
-            todo_list.append(line.strip())
-except FileNotFoundError as e:
-    print(f"Error details: {e}")
-    pass
+with app.app_context():
+    db.create_all()
+
+@app.before_request
+def load_data_to_g():
+    todos = Todo.query.all()
+    g.todos = todos 
+    g.todo = None
 
 @app.route("/")
 def index():
-    return render_template("index.html", todo_list=todo_list)
+    return render_template("index.html")
 
 @app.route("/add", methods=["POST"])
 def add_todo():
-    todo = request.form["todo"]
-    todo_list.append(todo)
-    save_todo_list()
-    return redirect(url_for("index"))
+    # Get the data from the form
+    todo = Todo(
+        name=request.form["todo"],
+    )
+    # Add the new ToDo to the list
+    db.session.add(todo)
+    db.session.commit()
+    
+    # Add the new ToDo to the list
+    return redirect(url_for('index'))
 
-@app.route("/remove", methods=["POST"])
-def remove_todo():
-    item_number = int(request.form["item_number"])
-    if 0 < item_number <= len(todo_list):
-        todo_list.pop(item_number - 1)
-        save_todo_list()
-    return redirect(url_for("index"))
-
-def save_todo_list():
-    with open(todo_file, "w") as file:
-        for todo in todo_list:
-            file.write(todo + "\n")
+# Delete a ToDo
+@app.route('/remove/<int:id>', methods=['GET', "POST"])
+def remove_todo(id):
+    db.session.delete(Todo.query.filter_by(id=id).first())
+    db.session.commit()
+    return redirect(url_for('index'))
 
 if __name__ == "__main__":
     app.run(debug=True)
