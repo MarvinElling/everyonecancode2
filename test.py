@@ -1,2 +1,3 @@
-string = "Hello"
-string.upper()
+a = 1
+
+print(a[0])
